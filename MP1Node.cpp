@@ -16,6 +16,14 @@
  * You can add new members to the class if you think it
  * is necessary for your logic to work
  */
+bool exist(int n, int array[], int l){
+    for(int i=0;i<l;i++){
+        if(n==array[i]) return true;
+    }
+
+    return false;
+}
+
 MP1Node::MP1Node(Member *member, Params *params, EmulNet *emul, Log *log, Address *address) {
     for( int i = 0; i < 6; i++ ) {
         NULLADDR[i] = 0;
@@ -308,13 +316,40 @@ void MP1Node::nodeLoopOps() {
     }
 
     //propagate my memberlist to except myself
+    int live = 0;
     for(i=memberNode->memberList.begin()+1;i!=memberNode->memberList.end();i++){
-        if(i->getheartbeat()>=0){
-            Address addr;
-            *(int*)(&addr.addr[0]) = i->getid();
-            *(short*)(&addr.addr[4]) = i->getport();
-            sendMemberList(&addr);
-        }    
+        if(i->getheartbeat()>=0){    
+            live++;
+        }
+    }
+
+    if(live<=GOSSIPNUM){
+        for(i=memberNode->memberList.begin()+1;i!=memberNode->memberList.end();i++){
+            if(i->getheartbeat()>=0){
+                Address addr;
+                *(int*)(&addr.addr[0]) = i->getid();
+                *(short*)(&addr.addr[4]) = i->getport();
+                sendMemberList(&addr);
+            }    
+        }
+    }
+
+    else{
+        int counter = 0;
+        int size = memberNode->memberList.size();
+        int indexes[GOSSIPNUM] = {0};
+        while(counter<GOSSIPNUM){
+            int index = rand()%(size-1);
+            i = memberNode->memberList.begin()+(index+1);
+            if(i->getheartbeat()>=0 && !exist(index+1, indexes, GOSSIPNUM)){
+                indexes[counter] = index + 1;
+                Address addr;
+                *(int*)(&addr.addr[0]) = i->getid();
+                *(short*)(&addr.addr[4]) = i->getport();
+                sendMemberList(&addr);
+                counter++;
+            }
+        }
     }
     return;
 }
@@ -391,6 +426,7 @@ void MP1Node::updateMemberList(Address* addr, long heartbeat) {
     } 
 
     //if no such entry
+    if(heartbeat==-1) return;
     MemberListEntry entry = MemberListEntry(id, port, heartbeat, memberNode->myPos->gettimestamp());
     memberNode->memberList.push_back(entry);
     log->logNodeAdd(&memberNode->addr,addr);
